@@ -99,6 +99,9 @@
     </style>
 </head>
 <body class="flex flex-col items-center justify-start min-h-screen">
+    <!-- Scripts de Firebase (deben ir antes de tu script principal) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <!-- Contenedor principal con márgenes para dispositivos móviles -->
     <div class="bg-black text-white w-full h-full px-4 md:px-8">
         <!-- Encabezado -->
@@ -621,7 +624,42 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+                // Configuración de tu proyecto Firebase (reemplaza los valores por los tuyos)
+                const firebaseConfig = {
+                      apiKey: "AIzaSyAtWU-vSebkMQ1dl0pLvM_n4YOVAc-s7oU",
+                      authDomain: "visualprueba-29789.firebaseapp.com",
+                      projectId: "visualprueba-29789",
+                      storageBucket: "visualprueba-29789.firebasestorage.app",
+                      messagingSenderId: "1016203809081",
+                      appId: "1:1016203809081:web:71d2b601428699f877d8e8",
+                      measurementId: "G-3EBHD7XW9V"
+                };
+
+                // Inicializa Firebase y Firestore
+                firebase.initializeApp(firebaseConfig);
+                const db = firebase.firestore();
+
+                document.addEventListener('DOMContentLoaded', () => {
+    // --- CARGAR CANTIDADES GUARDADAS AL INICIAR ---
+    // Usamos una colección global "cantidades_productos" y un documento único "global"
+    db.collection("cantidades_productos").doc("global").get().then(doc => {
+        if (doc.exists) {
+            const data = doc.data();
+            // Para cada input de cantidad, buscamos su producto y vista
+            document.querySelectorAll('.product-row').forEach((row, idx) => {
+                // Creamos un ID único por vista y producto
+                const view = row.closest('#manana-view') ? 'manana' : 'tarde';
+                const producto = row.querySelector('span.text-left').textContent.trim();
+                const key = view + '_' + producto;
+                const input = row.querySelector('.cantidad-input');
+                if (data[key] !== undefined) {
+                    input.value = data[key];
+                    // Disparamos el evento input para actualizar totales
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+        }
+    });
             const btnManana = document.getElementById('btn-manana');
             const btnTarde = document.getElementById('btn-tarde');
             const btnResumen = document.getElementById('btn-resumen');
@@ -714,69 +752,94 @@
             });
             
             mainContainer.addEventListener('input', (event) => {
-                if (event.target.classList.contains('cantidad-input')) {
-                    const currentRow = event.target.closest('.product-row');
-                    const precioItem = currentRow.querySelector('.precio-item');
-                    const subtotalItem = currentRow.querySelector('.subtotal-item');
-                    const gananciaItem = currentRow.querySelector('.ganancia-item');
-                    
-                    subtotalItem.classList.remove('animate-neon-flash');
-                    void subtotalItem.offsetWidth;
-                    subtotalItem.classList.add('animate-neon-flash');
-                    
-                    gananciaItem.classList.remove('animate-neon-flash');
-                    void gananciaItem.offsetWidth;
-                    gananciaItem.classList.add('animate-neon-flash');
+        if (event.target.classList.contains('cantidad-input')) {
+            const currentRow = event.target.closest('.product-row');
+            const precioItem = currentRow.querySelector('.precio-item');
+            const subtotalItem = currentRow.querySelector('.subtotal-item');
+            const gananciaItem = currentRow.querySelector('.ganancia-item');
 
-                    setTimeout(() => {
-                        const cantidad = parseFloat(event.target.value) || 0;
-                        const precio = parseFloat(precioItem.dataset.price);
-                        const subtotal = cantidad * precio;
+            subtotalItem.classList.remove('animate-neon-flash');
+            void subtotalItem.offsetWidth;
+            subtotalItem.classList.add('animate-neon-flash');
 
-                        let ganancia = 0;
-                        // Check if the profit multiplier exists for the current view
-                        if (currentRow.dataset.profitMultiplier) {
-                            const profitMultiplier = parseFloat(currentRow.dataset.profitMultiplier);
-                            ganancia = (cantidad * profitMultiplier) - subtotal;
-                        } else {
-                            // Default calculation for the Tarde view
-                            ganancia = subtotal * 0.20;
-                        }
+            gananciaItem.classList.remove('animate-neon-flash');
+            void gananciaItem.offsetWidth;
+            gananciaItem.classList.add('animate-neon-flash');
 
-                        subtotalItem.textContent = `Q${subtotal.toLocaleString('es-GT')}`;
-                        subtotalItem.dataset.subtotal = subtotal;
-                        gananciaItem.textContent = `Q${ganancia.toLocaleString('es-GT')}`;
-                        gananciaItem.dataset.ganancia = ganancia;
+            setTimeout(() => {
+                const cantidad = parseFloat(event.target.value) || 0;
+                const precio = parseFloat(precioItem.dataset.price);
+                const subtotal = cantidad * precio;
 
-                        // Actualizar los totales de la vista activa
-                        const activeView = mananaView.classList.contains('hidden') ? tardeView : mananaView;
-                        updateViewTotals(activeView);
-
-                    }, 500);
+                let ganancia = 0;
+                // Check if the profit multiplier exists for the current view
+                if (currentRow.dataset.profitMultiplier) {
+                    const profitMultiplier = parseFloat(currentRow.dataset.profitMultiplier);
+                    ganancia = (cantidad * profitMultiplier) - subtotal;
+                } else {
+                    // Default calculation for the Tarde view
+                    ganancia = subtotal * 0.20;
                 }
+
+                subtotalItem.textContent = `Q${subtotal.toLocaleString('es-GT')}`;
+                subtotalItem.dataset.subtotal = subtotal;
+                gananciaItem.textContent = `Q${ganancia.toLocaleString('es-GT')}`;
+                gananciaItem.dataset.ganancia = ganancia;
+
+                // Actualizar los totales de la vista activa
+                const activeView = mananaView.classList.contains('hidden') ? tardeView : mananaView;
+                updateViewTotals(activeView);
+
+                // --- GUARDAR CANTIDAD EN FIRESTORE (GLOBAL) ---
+                // Creamos un ID único por vista y producto
+                const view = currentRow.closest('#manana-view') ? 'manana' : 'tarde';
+                const producto = currentRow.querySelector('span.text-left').textContent.trim();
+                const key = view + '_' + producto;
+                // Leemos el documento actual, actualizamos el campo y lo guardamos
+                db.collection("cantidades_productos").doc("global").get().then(doc => {
+                    let data = {};
+                    if (doc.exists) data = doc.data();
+                    data[key] = cantidad;
+                    db.collection("cantidades_productos").doc("global").set(data);
+                });
+
+            }, 500);
+        }
             });
 
             // Manejar el botón de resumen
             btnResumen.addEventListener('click', () => {
-                // Obtener los totales de ambas vistas
-                const mananaTotals = updateViewTotals(mananaView);
-                const tardeTotals = updateViewTotals(tardeView);
+                                // Obtener los totales de ambas vistas
+                                const mananaTotals = updateViewTotals(mananaView);
+                                const tardeTotals = updateViewTotals(tardeView);
 
-                // Sumar los totales para el resumen general
-                const totalSubtotal = mananaTotals.totalSubtotal + tardeTotals.totalSubtotal;
-                const totalGanancia = mananaTotals.totalGanancia + tardeTotals.totalGanancia;
+                                // Sumar los totales para el resumen general
+                                const totalSubtotal = mananaTotals.totalSubtotal + tardeTotals.totalSubtotal;
+                                const totalGanancia = mananaTotals.totalGanancia + tardeTotals.totalGanancia;
 
-                modalSpinner.classList.remove('hidden');
-                resumenData.classList.add('hidden');
-                resumenModal.style.display = 'flex';
-                body.style.overflow = 'hidden';
+                                // GUARDAR EN FIRESTORE
+                                db.collection("resumen_ventas").add({
+                                    fecha: new Date().toISOString(),
+                                    pago: totalSubtotal,
+                                    ganancia: totalGanancia
+                                })
+                                .then(() => {
+                                    // Mostrar el modal después de guardar
+                                    modalSpinner.classList.remove('hidden');
+                                    resumenData.classList.add('hidden');
+                                    resumenModal.style.display = 'flex';
+                                    body.style.overflow = 'hidden';
 
-                setTimeout(() => {
-                    modalSpinner.classList.add('hidden');
-                    pagoTotalSpan.textContent = `Q${totalSubtotal.toLocaleString('es-GT')}`;
-                    gananciaTotalSpan.textContent = `Q${totalGanancia.toLocaleString('es-GT')}`;
-                    resumenData.classList.remove('hidden');
-                }, 1000);
+                                    setTimeout(() => {
+                                            modalSpinner.classList.add('hidden');
+                                            pagoTotalSpan.textContent = `Q${totalSubtotal.toLocaleString('es-GT')}`;
+                                            gananciaTotalSpan.textContent = `Q${totalGanancia.toLocaleString('es-GT')}`;
+                                            resumenData.classList.remove('hidden');
+                                    }, 1000);
+                                })
+                                .catch((error) => {
+                                    alert('Error al guardar en Firebase: ' + error.message);
+                                });
             });
 
             // Manejar el botón de cerrar modal
