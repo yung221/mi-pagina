@@ -779,7 +779,9 @@
                 const data = {};
                 rows.forEach((row, idx) => {
                     const input = row.querySelector('.cantidad-input');
-                    data[idx] = input ? Number(input.value) : 0;
+                    if (input && input.value !== "") {
+                        data[idx] = Number(input.value);
+                    } // Si está vacío, no se guarda nada para ese índice
                 });
                 try {
                     await db.collection('ventas').doc(viewName).set(data);
@@ -798,8 +800,12 @@
                         const rows = viewElement.querySelectorAll('.product-row');
                         rows.forEach((row, idx) => {
                             const input = row.querySelector('.cantidad-input');
-                            if (input && data[idx] !== undefined) {
-                                input.value = data[idx];
+                            if (input) {
+                                if (data[idx] === undefined || data[idx] === null || data[idx] === "") {
+                                    input.value = "";
+                                } else {
+                                    input.value = data[idx];
+                                }
                                 // Disparar evento input para actualizar subtotales
                                 input.dispatchEvent(new Event('input', { bubbles: true }));
                             }
